@@ -1,4 +1,8 @@
+# Timetable Generator
 
+---
+# Faculty Timetable Generator
+---
 # Classroom Timetable Generator
 
 A Python utility to generate consolidated classroom schedules from multi-division timetables stored in Excel workbooks.
