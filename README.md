@@ -15,6 +15,7 @@ This tool processes an Excel workbook containing multiple division timetables an
 
 - Multi-sheet processing (handles multiple divisions)
 - Classroom-specific schedule extraction
+- differentiation betwwen practical class and theoritical class
 - Schedule conflict handling
 - Formatted Excel output
 - Division tracking
