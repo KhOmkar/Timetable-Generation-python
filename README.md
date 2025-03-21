@@ -53,7 +53,7 @@ This tool processes an Excel workbook containing multiple division timetables an
 
 2. Run the script:
    ```bash
-   python timetable_generator.py
+   python test_class2.py
    ```
 
 ## Input File Format
