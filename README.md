@@ -34,7 +34,7 @@ This tool processes an Excel workbook containing multiple division timetables an
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/KhOmkar/Excel-manipulation_python
+   https://github.com/KhOmkar/Timetable-Generation-python
    ```
 
 2. Install dependencies:
@@ -53,7 +53,7 @@ This tool processes an Excel workbook containing multiple division timetables an
 
 2. Run the script:
    ```bash
-   python timetable_generator.py
+   python test_class2.py
    ```
 
 ## Input File Format
