@@ -7,60 +7,60 @@ def extract_course_teacher_data(excel_path):
     xls = pd.ExcelFile(excel_path)
     
     # Initialize an empty list to store all records
-    all_data = []
+    all_data = [] 
     
     # Process each sheet (division)
     for sheet_name in xls.sheet_names:
         print(f"Processing sheet: {sheet_name}")
         
         # Read the sheet
-        df = pd.read_excel(excel_path, sheet_name=sheet_name, skiprows=33, usecols=[0, 1,3],header=None)
+        df = pd.read_excel(excel_path, sheet_name=sheet_name, skiprows=33, usecols=[0, 1, 3, 5],header=None)
         
         # Clean the DataFrame
         df = df.dropna()  # Drop rows with NaN values
         df = df.reset_index(drop = True) # Reset index after dropping rows
         print(df)  
 
-        # Find columns with course and teacher info
-        for col_idx in range(len(df.columns)):  # Need at least 3 columns
-            potential_cols = df.iloc[:, col_idx:col_idx+3]
-            #print(potential_cols)
-            # Check if these columns look like our course-teacher data
-            if all(potential_cols.iloc[0].str.contains('Course|Teacher', case=False, na=False)):
-                course_data = potential_cols.iloc[1:]  # Skip header row
-                
-                # Process each row in this section
-                for _, row in course_data.iterrows():  #
-                    if pd.notna(row.iloc[0]) and pd.notna(row.iloc[1]) and pd.notna(row.iloc[2]):
-                        course_code = str(row.iloc[0]).strip()
+        for col_idx in range(len(df.columns)):  
+
+            df = df.iloc[1:]   
+
+            # Process each row in this section
+            for _, row in df.iterrows():  #
+                if pd.notna(row.iloc[0]) and pd.notna(row.iloc[1]) and pd.notna(row.iloc[2]):
+                    course_code = str(row.iloc[0]).strip()   #
+                    
+                    # Extract course full name and short form
+                    course_full = str(row.iloc[1]).strip()
+                    course_short_match = re.search(r'\(([^)]+)\)', course_full)
+                    course_short = course_short_match.group(1) if course_short_match else ""
+                    course_full = re.sub(r'\s*\([^)]*\)', '', course_full).strip()
+                    
+                    # Handle multiple teachers in one cell
+                    teachers_text = str(row.iloc[2])
+                    teachers = [t.strip() for t in teachers_text.split('\n') if t.strip()]
+                    
+                    # Extract classroom information
+                    classroom = str(row.iloc[3]).strip()
+
+                    for teacher in teachers:
+                        # Extract teacher full name and initials
+                        teacher_short_match = re.search(r'\(([^)]+)\)', teacher)
+                        teacher_short = teacher_short_match.group(1) if teacher_short_match else ""
+                        teacher_full = re.sub(r'\s*\([^)]*\)', '', teacher).strip()
                         
-                        # Extract course full name and short form
-                        course_full = str(row.iloc[1]).strip()
-                        course_short_match = re.search(r'\(([^)]+)\)', course_full)
-                        course_short = course_short_match.group(1) if course_short_match else ""
-                        course_full = re.sub(r'\s*\([^)]*\)', '', course_full).strip()
-                        
-                        # Handle multiple teachers in one cell
-                        teachers_text = str(row.iloc[2])
-                        teachers = [t.strip() for t in teachers_text.split('\n') if t.strip()]
-                        
-                        for teacher in teachers:
-                            # Extract teacher full name and initials
-                            teacher_short_match = re.search(r'\(([^)]+)\)', teacher)
-                            teacher_short = teacher_short_match.group(1) if teacher_short_match else ""
-                            teacher_full = re.sub(r'\s*\([^)]*\)', '', teacher).strip()
-                            
-                            # Add to our data collection
-                            all_data.append({
-                                'Division': sheet_name,
-                                'Teacher_Initials': teacher_short,
-                                'Course_Initials': course_short,
-                                'Course_Code': course_code,
-                                'Course_Name': course_full,
-                                'Teacher_Name': teacher_full
-                            })
-                # Move to next section in the sheet
-                break
+                        # Add to our data collection
+                        all_data.append({
+                            'Division': sheet_name,
+                            'Teacher_Initials': teacher_short,
+                            'Course_Initials': course_short,
+                            'Course_Code': course_code,
+                            'Course_Name': course_full,
+                            'Teacher_Name': teacher_full,
+                            'Classroom': classroom
+                        })
+            # Move to next section in the sheet
+            break
     
     # Create a DataFrame from all collected data
     result_df = pd.DataFrame(all_data)
@@ -83,7 +83,7 @@ def main():
             return
         
         # Define output path
-        output_path = "C:\\Users\\omkar\\Downloads\\timetable\\meta_info_2.csv"
+        output_path = "C:\\Users\\omkar\\Downloads\\timetable\\meta_info_4.csv"
         
         # Save to CSV
         result.to_csv(output_path, index=False)
@@ -95,6 +95,7 @@ def main():
         print(f"Unique divisions: {result['Division'].nunique()}")
         print(f"Unique courses: {result['Course_Name'].nunique()}")
         print(f"Unique teachers: {result['Teacher_Name'].nunique()}")
+        print(f"Unique classrooms: {result['Classroom'].nunique()}")
         
     except Exception as e:
         print(f"An error occurred: {e}")
