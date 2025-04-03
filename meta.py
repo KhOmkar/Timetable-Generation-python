@@ -26,8 +26,8 @@ def extract_course_teacher_data(excel_path):
             df = df.iloc[1:]   
 
             # Process each row in this section
-            for _, row in df.iterrows():  #
-                if pd.notna(row.iloc[0]) and pd.notna(row.iloc[1]) and pd.notna(row.iloc[2]):
+            for _, row in df.iterrows():  
+                if pd.notna(row.iloc[0]) : #
                     course_code = str(row.iloc[0]).strip()   #
                     
                     # Extract course full name and short form
@@ -38,7 +38,7 @@ def extract_course_teacher_data(excel_path):
                     
                     # Handle multiple teachers in one cell
                     teachers_text = str(row.iloc[2])
-                    teachers = [t.strip() for t in teachers_text.split('\n') if t.strip()]
+                    teachers = [t.strip() for t in re.split(r',|\n', teachers_text) if t.strip()]
                     
                     # Extract classroom information
                     classroom = str(row.iloc[3]).strip()
@@ -83,7 +83,7 @@ def main():
             return
         
         # Define output path
-        output_path = "C:\\Users\\omkar\\Downloads\\timetable\\meta_info_4.csv"
+        output_path = "C:\\Users\\omkar\\Downloads\\timetable\\meta_info_5.csv"
         
         # Save to CSV
         result.to_csv(output_path, index=False)
