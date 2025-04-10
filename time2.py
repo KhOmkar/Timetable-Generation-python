@@ -65,11 +65,60 @@ class TimetableGenerator:
         except Exception as e:
             raise Exception(f"Error processing sheets: {str(e)}")
 
+    def process_faculty_timetable(self, input_file, faculty_name):
+        """
+        Processes the input file to generate a timetable for a specific faculty member.
+        """
+        if not os.path.exists(input_file):
+            raise FileNotFoundError(f"Input file not found: {input_file}")
+
+        try:
+            excel_file = pd.ExcelFile(input_file)
+            print(f"Found {len(excel_file.sheet_names)} sheets in the workbook")
+            faculty_schedule = self.create_timetable_structure()
+
+            for sheet_name in excel_file.sheet_names:
+                print(f"Processing sheet: {sheet_name}")
+                workbook = load_workbook(input_file, data_only=True)
+                sheet = workbook[sheet_name]
+                division = sheet['N3'].value or f"Division ({sheet_name})"
+
+                raw_timetable = pd.read_excel(input_file, 
+                                              sheet_name=sheet_name,
+                                              skiprows=6, 
+                                              nrows=25)
+
+                for index, row in raw_timetable.iterrows():
+                    day = str(row.iloc[0]).strip()
+                    if day not in self.days:
+                        continue
+
+                    for col_idx, time_slot in enumerate(self.time_slots):
+                        current_cell = str(row.iloc[col_idx + 1])
+                        if faculty_name.upper() in current_cell.upper():
+                            components = current_cell.strip().split()
+                            cell_content = "\n".join([
+                                " ".join(components[:2]),
+                                " ".join(components[2:]),
+                                f"({division})"
+                            ])
+                            
+                            existing_content = faculty_schedule.at[day, time_slot]
+                            if existing_content:
+                                cell_content = f"{existing_content}\n---\n{cell_content}"
+                            
+                            faculty_schedule.at[day, time_slot] = cell_content
+
+            return faculty_schedule
+
+        except Exception as e:
+            raise Exception(f"Error processing sheets for faculty: {str(e)}")
+
     def is_classroom_in_cell(self, cell_content, target_classroom):
         classrooms = re.findall(r'H[A-Z]?\d+[A-Z]?', cell_content.upper())
         return any(target_classroom.upper() == cls for cls in classrooms)
 
-    def save_classroom_schedule(self, schedule_df, output_file, classroom):
+    def save_classroom_schedule(self, schedule_df, output_file, filter_value, is_faculty=False):
         """
         Saves the processed schedule to an Excel file with proper formatting.
         Includes styling, cell alignment, and automatic size adjustments.
@@ -78,14 +127,14 @@ class TimetableGenerator:
         try:
             with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
                 # Save the DataFrame to Excel
-                schedule_df.to_excel(writer, sheet_name=f'Schedule_{classroom}')
+                schedule_df.to_excel(writer, sheet_name=f'Schedule_{filter_value}')
                 workbook = writer.book
-                worksheet = writer.sheets[f'Schedule_{classroom}']
+                worksheet = writer.sheets[f'Schedule_{filter_value}']
 
                 # Add a title row at the top
                 worksheet.insert_rows(1)
                 title_cell = worksheet['B1']
-                title_cell.value = f"Combined Classroom Schedule - {classroom}"
+                title_cell.value = f"Combined Schedule - {filter_value}"
                 title_cell.font = Font(bold=True, size=14)
 
                 # Format all cells in the worksheet
@@ -161,7 +210,7 @@ class TimetableGenerator:
                         print(f"Warning: Could not merge column '{slot}' - {merge_err}")
 
                 # Add metadata section below the timetable
-                self._add_metadata_section(worksheet, classroom)
+                self._add_metadata_section(worksheet, filter_value, is_faculty)
 
                 # Save the final workbook
                 workbook.save(output_file)
@@ -169,8 +218,11 @@ class TimetableGenerator:
         except Exception as e:
             raise Exception(f"Error saving schedule: {str(e)}")
 
-    def _add_metadata_section(self, worksheet, classroom):
-        """Adds metadata section with merged cells and combined divisions"""
+    def _add_metadata_section(self, worksheet, filter_value, is_faculty=False):
+        """
+        Adds metadata section with merged cells and combined divisions.
+        If `is_faculty` is True, filters metadata by Teacher Name instead of Classroom.
+        """
         try:
             # Find the last row of the timetable
             last_row = worksheet.max_row
@@ -201,9 +253,15 @@ class TimetableGenerator:
             for file in meta_files:
                 if os.path.exists(file):
                     df = pd.read_csv(file)
-                    # Filter for current classroom
-                    classroom_filter = df['Classroom'].str.contains(classroom, na=False)
-                    filtered_df = df[classroom_filter]
+                    
+                    # Filter for current classroom or faculty
+                    if is_faculty:
+                        filter_column = 'Teacher_Name'
+                    else:
+                        filter_column = 'Classroom'
+                    
+                    filter_condition = df[filter_column].str.contains(filter_value, na=False, case=False)
+                    filtered_df = df[filter_condition]
                     
                     # Collect all metadata entries
                     for _, row in filtered_df.iterrows():
@@ -290,15 +348,24 @@ class TimetableGenerator:
 
 def main():
     input_file = "D:\\Classwise 24 25 Sem I.xlsm"
-    output_file = "C:\\Users\\omkar\\Downloads\\timetable\\Classroom_Schedule_SBK.xlsx"
-    classroom = "SBK"
+    output_file_classroom = "C:\\Users\\omkar\\Downloads\\timetable\\Classroom_Schedule_H309(1).xlsx"
+    output_file_faculty = "C:\\Users\\omkar\\Downloads\\timetable\\Faculty_Schedule_SBK(1).xlsx"
+    classroom = "H309"
+    faculty_name = "SBK"
 
     try:
         generator = TimetableGenerator()
         print(f"Generating schedule for classroom {classroom}...")
-        schedule = generator.process_all_sheets(input_file, classroom)
-        generator.save_classroom_schedule(schedule, output_file, classroom)
-        print(f"Schedule with metadata saved to {output_file}")
+        classroom_schedule = generator.process_all_sheets(input_file, classroom)
+        generator.save_classroom_schedule(classroom_schedule, output_file_classroom, classroom)
+        self._add_metadata_section(worksheet, classroom, is_faculty=False)  # For classroom timetable
+        print(f"Classroom schedule saved to {output_file_classroom}")
+
+        print(f"Generating schedule for faculty {faculty_name}...")
+        faculty_schedule = generator.process_faculty_timetable(input_file, faculty_name)
+        generator.save_classroom_schedule(faculty_schedule, output_file_faculty, faculty_name, is_faculty=True)
+        self._add_metadata_section(worksheet, faculty_name, is_faculty=True)  # For faculty timetable
+        print(f"Faculty schedule saved to {output_file_faculty}")
 
     except Exception as e:
         print(f"Error: {str(e)}")
