@@ -32,13 +32,14 @@ class TimetableGenerator:
                 print(f"Processing sheet: {sheet_name}")
                 workbook = load_workbook(input_file, data_only=True)
                 sheet = workbook[sheet_name]
-                division = sheet['N3'].value or f"Division ({sheet_name})"
+                division = sheet_name
 
                 raw_timetable = pd.read_excel(input_file, 
                                            sheet_name=sheet_name,
                                            skiprows=6, 
                                            nrows=25)
-
+                
+                print(raw_timetable)
                 for index, row in raw_timetable.iterrows():
                     day = str(row.iloc[0]).strip()
                     if day not in self.days:
@@ -54,11 +55,10 @@ class TimetableGenerator:
                                 f"({division})"
                             ])
                             
+                            # Only save if the cell is empty (first occurrence)
                             existing_content = combined_schedule.at[day, time_slot]
-                            if existing_content:
-                                cell_content = f"{existing_content}\n---\n{cell_content}"
-                            
-                            combined_schedule.at[day, time_slot] = cell_content
+                            if not existing_content:
+                                combined_schedule.at[day, time_slot] = cell_content
 
             return combined_schedule
 
@@ -81,13 +81,14 @@ class TimetableGenerator:
                 print(f"Processing sheet: {sheet_name}")
                 workbook = load_workbook(input_file, data_only=True)
                 sheet = workbook[sheet_name]
-                division = sheet['N3'].value or f"Division ({sheet_name})"
+                division =sheet_name
 
                 raw_timetable = pd.read_excel(input_file, 
                                               sheet_name=sheet_name,
                                               skiprows=6, 
                                               nrows=25)
 
+                print(raw_timetable)
                 for index, row in raw_timetable.iterrows():
                     day = str(row.iloc[0]).strip()
                     if day not in self.days:
@@ -103,11 +104,10 @@ class TimetableGenerator:
                                 f"({division})"
                             ])
                             
+                            # Only save if the cell is empty (first occurrence)
                             existing_content = faculty_schedule.at[day, time_slot]
-                            if existing_content:
-                                cell_content = f"{existing_content}\n---\n{cell_content}"
-                            
-                            faculty_schedule.at[day, time_slot] = cell_content
+                            if not existing_content:
+                                faculty_schedule.at[day, time_slot] = cell_content
 
             return faculty_schedule
 
@@ -118,101 +118,114 @@ class TimetableGenerator:
         classrooms = re.findall(r'H[A-Z]?\d+[A-Z]?', cell_content.upper())
         return any(target_classroom.upper() == cls for cls in classrooms)
 
-    def save_classroom_schedule(self, schedule_df, output_file, filter_value, is_faculty=False):
+    def save_classroom_schedule(self, schedule_df, output_file, filter_value, is_faculty=False, workbook=None, worksheet=None):
         """
         Saves the processed schedule to an Excel file with proper formatting.
         Includes styling, cell alignment, and automatic size adjustments.
         Adds metadata section below the timetable.
         """
         try:
-            with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-                # Save the DataFrame to Excel
-                schedule_df.to_excel(writer, sheet_name=f'Schedule_{filter_value}')
-                workbook = writer.book
-                worksheet = writer.sheets[f'Schedule_{filter_value}']
+            if workbook is None or worksheet is None:
+                with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+                    # Save the DataFrame to Excel
+                    schedule_df.to_excel(writer, sheet_name=f'Schedule_{filter_value}')
+                    workbook = writer.book
+                    worksheet = writer.sheets[f'Schedule_{filter_value}']
 
-                # Add a title row at the top
-                worksheet.insert_rows(1)
-                title_cell = worksheet['B1']
-                title_cell.value = f"Combined Schedule - {filter_value}"
-                title_cell.font = Font(bold=True, size=14)
+            # Add a title row at the top
+            worksheet.insert_rows(1)
+            title_cell = worksheet['B1']
+            title_text = "Faculty Schedule - " if is_faculty else "Classroom Schedule - "
+            title_cell.value = f"{title_text}{filter_value}"
+            title_cell.font = Font(bold=True, size=14)
 
-                # Format all cells in the worksheet
-                for row in worksheet.iter_rows(min_row=2):
-                    for cell in row:
-                        # Set alignment for all cells
-                        cell.alignment = Alignment(wrap_text=True, 
-                                                vertical='center', 
-                                                horizontal='center')
-                        
-                        # Highlight headers (first row and first column)
-                        if cell.row == 2 or cell.column == 1:
-                            cell.fill = PatternFill(start_color="E0E0E0", 
-                                                end_color="E0E0E0", 
-                                                fill_type="solid")
-                            cell.font = Font(bold=True)
+            # Format all cells in the worksheet
+            for row in worksheet.iter_rows(min_row=2):
+                for cell in row:
+                    # Set alignment for all cells
+                    cell.alignment = Alignment(wrap_text=True, 
+                                            vertical='center', 
+                                            horizontal='center')
+                    
+                    # Highlight headers (first row and first column)
+                    if cell.row == 2 or cell.column == 1:
+                        cell.fill = PatternFill(start_color="E0E0E0", 
+                                            end_color="E0E0E0", 
+                                            fill_type="solid")
+                        cell.font = Font(bold=True)
 
-                # Adjust column widths based on content
-                max_width = 0
-                for column in worksheet.columns:
-                    for cell in column:
-                        if cell.value:
-                            max_width = max(max_width, len(str(cell.value)))
+            # Adjust column widths based on content
+            max_width = 0
+            for column in worksheet.columns:
+                for cell in column:
+                    if cell.value:
+                        max_width = max(max_width, len(str(cell.value)))
 
-                uniform_width = min(max_width // 2, 25) 
-                for column in worksheet.columns:
-                    worksheet.column_dimensions[column[0].column_letter].width = uniform_width
+            uniform_width = min(max_width // 2, 25) 
+            for column in worksheet.columns:
+                worksheet.column_dimensions[column[0].column_letter].width = uniform_width
 
-                # Adjust row heights based on content
-                for row in worksheet.rows:
-                    max_lines = max(str(cell.value).count('\n') + 1 if cell.value else 1 for cell in row)
-                    worksheet.row_dimensions[row[0].row].height = max_lines * 15
+            # Adjust row heights based on content
+            for row in worksheet.rows:
+                max_lines = max(str(cell.value).count('\n') + 1 if cell.value else 1 for cell in row)
+                worksheet.row_dimensions[row[0].row].height = max_lines * 15
 
-                # Handle merged cells
-                for col_idx, column in enumerate(worksheet.iter_cols(), start=1):
-                    for row_idx in range(2, worksheet.max_row + 1):
-                        cell = worksheet.cell(row=row_idx, column=col_idx)
-                        if cell.value and len(str(cell.value)) > 20:
-                            next_col_idx = col_idx + 1
-                            if next_col_idx <= worksheet.max_column:
-                                next_cell = worksheet.cell(row=row_idx, column=next_col_idx)
-                                worksheet.merge_cells(start_row=row_idx, start_column=col_idx, end_row=row_idx, end_column=next_col_idx)
-                                next_cell.value = None
+            # Handle merged cells
+            # Read batch information from meta file
+            meta_df = pd.read_csv("C:/Users/omkar/Downloads/timetable/meta_info_Practical_section.csv")
+            batch_list = meta_df['Batch'].tolist()
 
-                # Merge rows 3 to 8 for selected time slot columns
-                selected_slots = ['10:20 to 10:30', '12:20 to 13:15', '15:05 to 15:10', '16:50 to 16:55']
-                slot_columns = [col for col in schedule_df.columns if col in selected_slots]
+            for col_idx, column in enumerate(worksheet.iter_cols(), start=1):
+                for row_idx in range(2, worksheet.max_row + 1):
+                    cell = worksheet.cell(row=row_idx, column=col_idx)
+                    cell_value = str(cell.value) if cell.value else ""
+                    
+                    # Check if cell contains any batch name or lab/Lab
+                    contains_batch = any(batch in cell_value for batch in batch_list)
+                    contains_lab = "lab" in cell_value.lower()
+                    
+                    if cell_value and (contains_batch or contains_lab):
+                        next_col_idx = col_idx + 1
+                        if next_col_idx <= worksheet.max_column:
+                            next_cell = worksheet.cell(row=row_idx, column=next_col_idx)
+                            worksheet.merge_cells(start_row=row_idx, start_column=col_idx, end_row=row_idx, end_column=next_col_idx)
+                            next_cell.value = None
 
-                # Get width of first column to apply to selected columns
-                first_col_letter = get_column_letter(1)  # Column B (first time slot)
-                first_col_width = worksheet.column_dimensions[first_col_letter].width
+            # Merge rows 3 to 8 for selected time slot columns
+            selected_slots = ['10:20 to 10:30', '12:20 to 13:15', '15:05 to 15:10', '16:50 to 16:55']
+            slot_columns = [col for col in schedule_df.columns if col in selected_slots]
 
-                break_labels = ["SHORT BREAK 1", "LUNCH BREAK", "SHORT BREAK 2", "SHORT BREAK 3"]
+            # Get width of first column to apply to selected columns
+            first_col_letter = get_column_letter(1)  # Column B (first time slot)
+            first_col_width = worksheet.column_dimensions[first_col_letter].width
 
-                for slot, label in zip(slot_columns, break_labels):
-                    try:
-                        col_idx = list(schedule_df.columns).index(slot) + 2  # +2 because A is index, B is first time slot
-                        col_letter = get_column_letter(col_idx)
+            break_labels = ["SHORT BREAK 1", "LUNCH BREAK", "SHORT BREAK 2", "SHORT BREAK 3"]
 
-                        # Merge rows 3 to 8 in this column
-                        worksheet.merge_cells(start_row=3, end_row=8, start_column=col_idx, end_column=col_idx)
+            for slot, label in zip(slot_columns, break_labels):
+                try:
+                    col_idx = list(schedule_df.columns).index(slot) + 2  # +2 because A is index, B is first time slot
+                    col_letter = get_column_letter(col_idx)
 
-                        # Set the column width same as the first column
-                        worksheet.column_dimensions[col_letter].width = first_col_width
+                    # Merge rows 3 to 8 in this column
+                    worksheet.merge_cells(start_row=3, end_row=8, start_column=col_idx, end_column=col_idx)
 
-                        # Add the break label vertically in the merged cell
-                        merged_cell = worksheet.cell(row=3, column=col_idx)
-                        merged_cell.value = label
-                        merged_cell.alignment = Alignment(horizontal='center', vertical='center', text_rotation=90)
-                        merged_cell.font = Font(bold=True)
+                    # Set the column width same as the first column
+                    worksheet.column_dimensions[col_letter].width = first_col_width
 
-                    except Exception as merge_err:
-                        print(f"Warning: Could not merge column '{slot}' - {merge_err}")
+                    # Add the break label vertically in the merged cell
+                    merged_cell = worksheet.cell(row=3, column=col_idx)
+                    merged_cell.value = label
+                    merged_cell.alignment = Alignment(horizontal='center', vertical='center', text_rotation=90)
+                    merged_cell.font = Font(bold=True)
 
-                # Add metadata section below the timetable
-                self._add_metadata_section(worksheet, filter_value, is_faculty)
+                except Exception as merge_err:
+                    print(f"Warning: Could not merge column '{slot}' - {merge_err}")
 
-                # Save the final workbook
+            # Add metadata section below the timetable
+            self._add_metadata_section(worksheet, filter_value, is_faculty)
+
+            # Save the final workbook if we created it
+            if workbook is not None and worksheet is not None:
                 workbook.save(output_file)
 
         except Exception as e:
@@ -256,7 +269,7 @@ class TimetableGenerator:
                     
                     # Filter for current classroom or faculty
                     if is_faculty:
-                        filter_column = 'Teacher_Name'
+                        filter_column = 'Teacher_Initials'
                     else:
                         filter_column = 'Classroom'
                     
@@ -348,24 +361,35 @@ class TimetableGenerator:
 
 def main():
     input_file = "D:\\Classwise 24 25 Sem I.xlsm"
-    output_file_classroom = "C:\\Users\\omkar\\Downloads\\timetable\\Classroom_Schedule_H309(1).xlsx"
-    output_file_faculty = "C:\\Users\\omkar\\Downloads\\timetable\\Faculty_Schedule_SBK(1).xlsx"
-    classroom = "H309"
-    faculty_name = "SBK"
+    output_file = "C:\\Users\\omkar\\Downloads\\timetable\\Combined_Schedule4.xlsx"
+    classroom = "H203"
+    faculty_name = "PVS"
 
     try:
         generator = TimetableGenerator()
+        
+        # Generate classroom schedule
         print(f"Generating schedule for classroom {classroom}...")
         classroom_schedule = generator.process_all_sheets(input_file, classroom)
-        generator.save_classroom_schedule(classroom_schedule, output_file_classroom, classroom)
-        self._add_metadata_section(worksheet, classroom, is_faculty=False)  # For classroom timetable
-        print(f"Classroom schedule saved to {output_file_classroom}")
-
+        
+        # Generate faculty schedule
         print(f"Generating schedule for faculty {faculty_name}...")
         faculty_schedule = generator.process_faculty_timetable(input_file, faculty_name)
-        generator.save_classroom_schedule(faculty_schedule, output_file_faculty, faculty_name, is_faculty=True)
-        self._add_metadata_section(worksheet, faculty_name, is_faculty=True)  # For faculty timetable
-        print(f"Faculty schedule saved to {output_file_faculty}")
+        
+        # Save both schedules to the same Excel file with different sheets
+        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+            # Save classroom schedule
+            classroom_schedule.to_excel(writer, sheet_name=f'Classroom_{classroom}')
+            workbook = writer.book
+            worksheet = writer.sheets[f'Classroom_{classroom}']
+            generator.save_classroom_schedule(classroom_schedule, output_file, classroom, is_faculty=False, workbook=workbook, worksheet=worksheet)
+            
+            # Save faculty schedule
+            faculty_schedule.to_excel(writer, sheet_name=f'Faculty_{faculty_name}')
+            worksheet = writer.sheets[f'Faculty_{faculty_name}']
+            generator.save_classroom_schedule(faculty_schedule, output_file, faculty_name, is_faculty=True, workbook=workbook, worksheet=worksheet)
+        
+        print(f"Combined schedules saved to {output_file}")
 
     except Exception as e:
         print(f"Error: {str(e)}")
